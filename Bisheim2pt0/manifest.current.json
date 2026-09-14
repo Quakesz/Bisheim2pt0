@@ -1,0 +1,13 @@
+{
+  "name": "Bisheim 2.0",
+  "version": "0.2.0",
+  "serverAddress": "srv781780.hstgr.cloud:2456",
+  "packages": [
+    {
+      "name": "Bisheim current client mods",
+      "version": "0.1.0",
+      "url": "REPLACE_WITH_HOSTED_BISHEIM_CLIENT_PACK_URL",
+      "sha256": "f5f53939e5e17fc16afa79cdda0c853fca772216a6ae030020e6d91e0d4c6344"
+    }
+  ]
+}

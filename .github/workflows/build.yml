@@ -1,0 +1,24 @@
+name: Build and test launcher
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build launcher
+        run: dotnet build Bisheim2pt0/Bisheim2pt0.csproj -c Release
+      - name: Run regression checks
+        run: dotnet run --project Bisheim2pt0.Tests/Bisheim2pt0.Tests.csproj -c Release

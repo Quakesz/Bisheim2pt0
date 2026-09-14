@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Bisheim2pt0/Services/SteamLocator.cs" Link="SteamLocator.cs" />
+    <Compile Include="../Bisheim2pt0/Services/ModdedLaunch.cs" Link="ModdedLaunch.cs" />
+    <Compile Include="../Bisheim2pt0/Services/LauncherSettings.cs" Link="LauncherSettings.cs" />
+  </ItemGroup>
+</Project>

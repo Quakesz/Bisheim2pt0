@@ -1,0 +1,14 @@
+{
+  "name": "Bisheim 2.0",
+  "version": "0.1.0",
+  "serverAddress": "YOUR_SERVER_ADDRESS",
+  "packages": [
+    {
+      "name": "Bisheim client pack",
+      "version": "0.1.0",
+      "url": "https://example.com/bisheim/packages/bisheim-client-0.1.0.zip",
+      "sha256": "REPLACE_WITH_THE_PACKAGE_SHA256",
+      "stripPrefix": "Client-Side Mods/"
+    }
+  ]
+}
