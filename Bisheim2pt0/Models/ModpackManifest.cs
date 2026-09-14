@@ -13,7 +13,7 @@ public sealed class PackageEntry
     public required string Name { get; init; }
     public required string Version { get; init; }
     public required string Url { get; init; }
-    public required string Sha256 { get; init; }
+    public required string Sha256 { get; set; }
     public string? StripPrefix { get; init; }
 }
 
@@ -26,6 +26,8 @@ public sealed class InstalledManifest
 
 public sealed class InstalledPackage
 {
+    public string Sha256 { get; init; } = "";
     public required string Name { get; init; }
     public required string Version { get; init; }
 }
+

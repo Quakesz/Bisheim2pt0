@@ -32,7 +32,7 @@ public sealed class LauncherService
     {
         EnsureGameStopped();
         var manifest = await GetManifestAsync();
-        Directory.CreateDirectory(LauncherSettings.ProfileRoot);
+        ThunderstoreInstaller.Recover(LauncherSettings.ProfileRoot);
 
         var installed = await ReadInstalledManifestAsync();
         if (!force && string.Equals(installed?.Version, manifest.Version, StringComparison.OrdinalIgnoreCase)) return;
@@ -49,9 +49,12 @@ public sealed class LauncherService
                 progress.Report(new(percent, $"Downloading {package.Name}…"));
                 var archive = Path.Combine(tempRoot, $"{i}.zip");
                 await DownloadAsync(package.Url, archive);
-                VerifySha256(archive, package.Sha256);
+                using (var hashStream = File.OpenRead(archive)) package.Sha256 = Convert.ToHexString(SHA256.HashData(hashStream));
+                var prior = installed?.Packages.FirstOrDefault(p => p.Name == package.Name && p.Version == package.Version);
+                if (!string.IsNullOrEmpty(prior?.Sha256) && !prior.Sha256.Equals(package.Sha256, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"The previously installed archive for {package.Name} {package.Version} has changed.");
                 progress.Report(new(percent + 5, $"Installing {package.Name}…"));
-                ExtractSafely(archive, stagingRoot, package.StripPrefix);
+                ThunderstoreInstaller.Extract(archive, stagingRoot, PackageId.Parse(package.Name + "-" + package.Version));
             }
 
             var newFiles = Directory.EnumerateFiles(stagingRoot, "*", SearchOption.AllDirectories)
@@ -59,8 +62,7 @@ public sealed class LauncherService
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            RemoveObsoleteManagedFiles(installed?.ManagedFiles ?? [], newFiles);
-            CopyStagedFiles(stagingRoot, newFiles);
+            ThunderstoreInstaller.ValidateLayout(stagingRoot);
 
             var installedManifest = new InstalledManifest
             {
@@ -68,13 +70,13 @@ public sealed class LauncherService
                 Packages = manifest.Packages.Select(p => new InstalledPackage
                 {
                     Name = p.Name,
-                    Version = p.Version
+                    Version = p.Version,
+                    Sha256 = p.Sha256
                 }).ToList(),
                 ManagedFiles = newFiles
             };
-            await File.WriteAllTextAsync(
-                LauncherSettings.InstalledManifestFile,
-                JsonSerializer.Serialize(installedManifest, new JsonSerializerOptions { WriteIndented = true }));
+            EnsureGameStopped();
+            ThunderstoreInstaller.Commit(stagingRoot, LauncherSettings.ProfileRoot, installed, installedManifest);
             progress.Report(new(100, "Bisheim is ready"));
         }
         finally
@@ -88,6 +90,9 @@ public sealed class LauncherService
         EnsureGameStopped();
         var gameExecutable = EnsureValheimInstalled();
         var manifest = await GetManifestAsync();
+        var installed = await ReadInstalledManifestAsync();
+        if (installed?.Version != manifest.Version) throw new InvalidOperationException("Install the current modpack version before playing.");
+        ThunderstoreInstaller.ValidateLayout(LauncherSettings.ProfileRoot);
         var endpoint = ParseServerEndpoint(manifest.ServerAddress);
         var steamExecutable = GetSteamExecutable();
 
@@ -111,96 +116,41 @@ public sealed class LauncherService
 
     private static async Task<ModpackManifest> GetManifestAsync()
     {
-        if (new Uri(LauncherSettings.ManifestUrl).Host == "example.com")
-            throw new InvalidOperationException("The modpack download address has not been configured yet.");
-        using var response = await Http.GetAsync(LauncherSettings.ManifestUrl);
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync();
-        return await JsonSerializer.DeserializeAsync<ModpackManifest>(stream, JsonOptions)
-            ?? throw new InvalidDataException("The Bisheim manifest is empty or invalid.");
+        var plan = await new ThunderstoreClient(Http).ResolveAsync();
+        return new ModpackManifest
+        {
+            Version = plan.Version,
+            ServerAddress = LauncherSettings.ServerAddress,
+            Packages = plan.Packages.Select(p => new PackageEntry
+            {
+                Name = p.Id.Key, Version = p.Version, Url = p.DownloadUrl, Sha256 = ""
+            }).ToList()
+        };
     }
-
     private static async Task DownloadAsync(string url, string destination)
     {
+        ThunderstoreClient.ValidateDownloadUrl(url);
         using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         await using var input = await response.Content.ReadAsStreamAsync();
         await using var output = File.Create(destination);
-        await input.CopyToAsync(output);
-    }
-
-    private static void VerifySha256(string file, string expected)
-    {
-        using var stream = File.OpenRead(file);
-        var actual = Convert.ToHexString(SHA256.HashData(stream));
-        if (!actual.Equals(expected.Replace("-", ""), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"Security check failed for {Path.GetFileName(file)}.");
-    }
-
-    private static void ExtractSafely(string archive, string destination, string? stripPrefix)
-    {
-        var root = Path.GetFullPath(destination) + Path.DirectorySeparatorChar;
-        var normalizedPrefix = string.IsNullOrWhiteSpace(stripPrefix)
-            ? null
-            : stripPrefix.Replace('\\', '/').Trim('/') + "/";
-        using var zip = ZipFile.OpenRead(archive);
-        foreach (var entry in zip.Entries)
+        var buffer = new byte[81920];
+        long total = 0;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        int read;
+        while ((read = await input.ReadAsync(buffer, timeout.Token)) > 0)
         {
-            var entryName = entry.FullName.Replace('\\', '/');
-            if (normalizedPrefix is not null)
-            {
-                if (!entryName.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase)) continue;
-                entryName = entryName[normalizedPrefix.Length..];
-            }
-            if (string.IsNullOrWhiteSpace(entryName)) continue;
-
-            var output = Path.GetFullPath(Path.Combine(destination, entryName));
-            if (!output.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("A package contains an unsafe file path.");
-            if (string.IsNullOrEmpty(entry.Name)) Directory.CreateDirectory(output);
-            else
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-                entry.ExtractToFile(output, overwrite: true);
-            }
+            if ((total += read) > 512L * 1024 * 1024) throw new InvalidDataException("Package download exceeds 512 MB.");
+            await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
         }
     }
 
     private static async Task<InstalledManifest?> ReadInstalledManifestAsync()
     {
+        ThunderstoreInstaller.Recover(LauncherSettings.ProfileRoot);
         if (!File.Exists(LauncherSettings.InstalledManifestFile)) return null;
         await using var stream = File.OpenRead(LauncherSettings.InstalledManifestFile);
         return await JsonSerializer.DeserializeAsync<InstalledManifest>(stream, JsonOptions);
-    }
-
-    private static void RemoveObsoleteManagedFiles(IEnumerable<string> oldFiles, ICollection<string> newFiles)
-    {
-        var retained = new HashSet<string>(newFiles, StringComparer.OrdinalIgnoreCase);
-        foreach (var relative in oldFiles.Where(path => !retained.Contains(path)))
-        {
-            var target = ResolveProfilePath(relative);
-            if (File.Exists(target)) File.Delete(target);
-        }
-    }
-
-    private static void CopyStagedFiles(string stagingRoot, IEnumerable<string> files)
-    {
-        foreach (var relative in files)
-        {
-            var source = Path.Combine(stagingRoot, relative);
-            var target = ResolveProfilePath(relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Copy(source, target, overwrite: true);
-        }
-    }
-
-    private static string ResolveProfilePath(string relative)
-    {
-        var root = Path.GetFullPath(LauncherSettings.ProfileRoot) + Path.DirectorySeparatorChar;
-        var target = Path.GetFullPath(Path.Combine(LauncherSettings.ProfileRoot, relative));
-        if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("The installed file list contains an unsafe path.");
-        return target;
     }
 
     private static string EnsureValheimInstalled()
@@ -236,4 +186,5 @@ public sealed class LauncherService
         return $"{parts[0]}:{port}";
     }
 }
+
 

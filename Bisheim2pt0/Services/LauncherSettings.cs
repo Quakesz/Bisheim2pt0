@@ -3,8 +3,10 @@ namespace Bisheim2pt0.Services;
 
 public static class LauncherSettings
 {
-    // Replace this with the public HTTPS URL of your production manifest.
-    public const string ManifestUrl = "https://example.com/bisheim/manifest.json";
+    // Published Thunderstore modpack and Bisheim server.
+    public const string ModpackName = "Bisheim2pt0-Bisheim2pt0";
+    public const string ModpackApiUrl = "https://thunderstore.io/api/experimental/package/Bisheim2pt0/Bisheim2pt0/";
+    public const string ServerAddress = "srv781780.hstgr.cloud:2456";
     public const string SteamAppId = "892970";
 
     public static string ProfileRoot => Path.Combine(
@@ -13,4 +15,5 @@ public static class LauncherSettings
 
     public static string InstalledManifestFile => Path.Combine(ProfileRoot, ".bisheim-installed.json");
 }
+
 

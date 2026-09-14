@@ -20,6 +20,7 @@ components stay on the dedicated server.
 - WebMap and all generated or static WebMap content
 - Server cache and log files
 
-Future changes are made by publishing a new client ZIP, changing the package URL/hash/version in
-the hosted manifest, and incrementing the top-level manifest version. The launcher itself does not
-need to be recompiled.
+Future changes are published as a new version of the Bisheim2pt0 Thunderstore modpack.
+Its dependency list selects mod package versions. The launcher downloads packages from
+Thunderstore and preserves existing local configuration files. New shared configurations
+must be reviewed and added to the modpack separately; the current release has none.

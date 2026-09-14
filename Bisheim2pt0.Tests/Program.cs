@@ -56,9 +56,11 @@ try
     Reject(() => ModdedLaunch.Prepare("steam.exe", game, profile, "server.example:2456"), "Reject mismatched loader");
     File.Delete(preloader);
     Reject(() => ModdedLaunch.Prepare("steam.exe", game, profile, "server.example:2456"), "Reject missing preloader");
+    await ThunderstoreChecks.Run(root, Check, args.Contains("--live"));
     Console.WriteLine($"{count} checks passed. No Steam or game process was launched.");
 }
 finally
 {
     Directory.Delete(root, recursive: true);
 }
+

@@ -9,5 +9,9 @@
     <Compile Include="../Bisheim2pt0/Services/SteamLocator.cs" Link="SteamLocator.cs" />
     <Compile Include="../Bisheim2pt0/Services/ModdedLaunch.cs" Link="ModdedLaunch.cs" />
     <Compile Include="../Bisheim2pt0/Services/LauncherSettings.cs" Link="LauncherSettings.cs" />
+    <Compile Include="../Bisheim2pt0/Services/ThunderstoreClient.cs" Link="ThunderstoreClient.cs" />
+    <Compile Include="../Bisheim2pt0/Services/ThunderstoreInstaller.cs" Link="ThunderstoreInstaller.cs" />
+    <Compile Include="../Bisheim2pt0/Models/ModpackManifest.cs" Link="ModpackManifest.cs" />
   </ItemGroup>
 </Project>
+

@@ -1,35 +1,33 @@
 # Bisheim 2.0 Launcher
 
-Windows launcher for the Bisheim Valheim server.
+Windows launcher for the [Bisheim Thunderstore modpack](https://thunderstore.io/c/valheim/p/Bisheim2pt0/Bisheim2pt0/).
 
-Repository: https://github.com/Quakesz/Bisheim2pt0
+## Current behavior
 
-## Development status
-
-The source builds and its 12 automated regression checks pass. It is not ready for player
-installation: the manifest URL and client-package URL remain placeholders, and a real modded
-launch has not yet been tested.
+- Reads the latest published Bisheim modpack version and resolves its dependency graph.
+- Uses the exact top-level versions selected by the modpack. Older transitive requirements reuse those versions; conflicting newer requirements produce an error.
+- Downloads the dependency ZIPs directly from Thunderstore and installs the current pack's Windows BepInEx layout into an isolated profile.
+- Stages updates, validates the bootstrap files, and switches profiles with automatic rollback on activation failure.
+- Preserves existing configuration files and retains the previous profile as a backup.
+- Launches Valheim through Steam with the isolated Doorstop profile and the Bisheim server address.
 
 ## Build and test
 
-Requires Windows and the .NET 8 SDK.
+Requires Windows and .NET 8 SDK.
 
 ```powershell
 dotnet build Bisheim2pt0/Bisheim2pt0.csproj -c Release
 dotnet run --project Bisheim2pt0.Tests/Bisheim2pt0.Tests.csproj -c Release
+# Optional: download the published pack into temporary folders; never starts Steam or Valheim.
+dotnet run --project Bisheim2pt0.Tests/Bisheim2pt0.Tests.csproj -c Release -- --live
 ```
 
-See [launcher documentation](Bisheim2pt0/README.md) for implemented behavior and limitations.
-See [client package policy](Bisheim2pt0/CLIENT-PACK-POLICY.md) for included/excluded mods.
+## Validation and remaining work
+
+Release build passes with zero warnings. Offline regression checks and a real Thunderstore download/extraction test pass. A real modded-game launch and server connection have not yet been tested. Mod compatibility is not established by successful extraction.
+
+Read [launcher details](Bisheim2pt0/README.md) for update, backup, integrity, and layout limits.
 
 ## License
 
-The launcher uses the GNU GPL v3 license selected in this repository's existing LICENSE file.
-Retain that LICENSE file when importing these files. Third-party mods and runtimes remain under
-their respective licenses; this source upload contains no mod binaries or game files.
-
-## Distribution plan
-
-Host a validated client ZIP as a versioned GitHub Release asset, with its SHA-256 hash and URL
-in the public manifest. Configure the launcher manifest URL once the manifest and package are
-actually available. No release assets or production manifest have been published yet.
+The existing repository LICENSE is GNU GPL v3 and remains unchanged. Mods and their runtimes retain their own licenses and are downloaded from their original Thunderstore packages.

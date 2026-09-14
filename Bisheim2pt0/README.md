@@ -1,90 +1,35 @@
-# Bisheim 2.0 Launcher
+# Launcher implementation notes
 
-Windows-first launcher for installing, repairing, updating, and starting the Bisheim Valheim modpack.
+## Published modpack
 
-## Current MVP
+https://thunderstore.io/c/valheim/p/Bisheim2pt0/Bisheim2pt0/
 
-- WPF interface with Install & Play and Repair actions
-- Remote JSON manifest and modpack version comparison
-- Add or remove manifest packages without recompiling the launcher
-- Managed-file inventory removes obsolete mods on update without touching unrelated files
-- SHA-256 verification before installing packages
-- ZIP-slip protection during extraction
-- Isolated profile under `%LOCALAPPDATA%\Bisheim2pt0\profile`
-- Steam launch with Doorstop arguments pointing to the isolated BepInEx profile
-- Default and custom Steam library detection (modern and legacy libraryfolders.vdf)
-- Refuse conflicting game-folder loaders; leave the bootstrap disabled for ordinary Steam launches
-- Direct connection to `srv781780.hstgr.cloud:2456` using Valheim's `+connect` argument
+The launcher reads Thunderstore's experimental package API. Updating this modpack to a higher version publishes a new dependency selection for the launcher. Changes to the individual mods alone do not automatically replace the top-level versions chosen by the modpack. Server address remains srv781780.hstgr.cloud:2456 in LauncherSettings.
 
-## Build
+## Downloads and integrity
 
-Install the .NET 8 SDK on Windows, then run:
+Downloads start at Thunderstore HTTPS package endpoints (which may redirect to its CDN). The API does not provide an independent expected SHA-256. The launcher records the hash of each downloaded archive and rejects a different hash when downloading a previously installed identical package version again. This is trust on first use, not signature verification or an independent first-download authenticity check. ZIP parse errors and unsafe paths abort before profile activation.
 
-```powershell
-dotnet publish .\Bisheim2pt0.csproj -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-```
+Limits: 150 selected packages, 1,000 resolver iterations, 512 MB per download, 30,000 entries and 2 GB expanded size per archive. Downloads time out. Unsupported third-party core/patcher/monomod routing is rejected for explicit review.
 
-The output will be under `bin\Release\net8.0-windows\win-x64\publish`.
+## Installation layout
 
-## Before the first player test
+Supports the seven packages in Bisheim2pt0 1.0.0: the official BepInExPack_Valheim Windows bootstrap and core, plugins at archive root, BepInEx/plugins, nested plugins folders, and config folders. Plugins are placed in stable author-package subfolders with relative assets retained. The modpack itself is processed last. Metadata-only modpacks add no game files.
 
-1. Host `manifest.json` and the modpack ZIP at public HTTPS URLs.
-2. Replace `LauncherSettings.ManifestUrl` with the real manifest URL.
-3. Put the profile contents in the ZIP, including BepInEx, plugins, and shared configs. A package
-   may use `stripPrefix` when its ZIP has one containing folder.
-4. Generate the package hash with `Get-FileHash .\package.zip -Algorithm SHA256`.
-5. Put that hash in the manifest.
+This is not a complete implementation of every Thunderstore installer format. New mods that use custom installer declarations or unusual routes require validation before release. Routing reference: https://wiki.thunderstore.io/mods/packaging-your-mods
 
-`manifest.current.json` is wired to the sanitized `Bisheim-client-pack-0.1.0.zip` hash. Replace
-its placeholder URL after hosting that package. See `CLIENT-PACK-POLICY.md` for the enforced
-server/client separation used when assembling the package.
+## Updates and backups
 
-## Next build targets
+Profile: %LOCALAPPDATA%/Bisheim2pt0/profile.
 
-- Verify a real modded game launch with the hosted client package
-- Validate and host the sanitized client package and production manifest
-- Download progress by bytes and cancellation
-- Preserve player-editable config files during updates
-- Server status and direct-connect button
-- Launcher self-update and code signing
+Candidate profile is built beside the current profile. The previous profile becomes profile.rollback; older backups are retained with unique suffixes. Activation failures restore the old profile. If the program stops between moving the old profile away and activating its replacement, the next profile read recovers profile.rollback. Backups consume disk space and currently require manual cleanup.
 
-## Local continuation update
+Existing files under BepInEx/config are preserved, including obsolete configs. New config defaults are installed only if that path does not already exist. Server-provided config changes therefore do not override existing player configs. Obsolete managed non-config files are removed; unmanaged files are preserved, and conflicting unmanaged file replacements abort the update.
 
-Steam discovery, isolated Doorstop launch arguments, loader conflict checks, and UI busy/error
-handling are implemented. Missing System.IO imports in the original source were also corrected.
-The WPF project builds on Windows with .NET SDK 8.0.425 (zero warnings/errors).
+## Launch limitations
 
-The launcher places winhttp.dll and a disabled doorstop_config.ini beside valheim.exe on first
-launch. It points Doorstop at the profile's BepInEx.Preloader.dll through Steam arguments.
-It recognizes Doorstop 3 and 4 configuration key names. It refuses to overwrite a different
-loader or existing configuration. If a future pack changes the loader DLL, replacement currently
-requires manually backing up/removing the old loader; automated bootstrap upgrades are pending.
-Mods/configs remain under the profile. Game-folder write access is required for bootstrap setup.
-An already running Valheim process blocks installs and launches.
+The launcher refuses existing foreign game-folder loaders/configs. The user's inspected Valheim installation already has a loader, so do not expect the launcher to overwrite it. Use a separate test installation or a deliberately backed-up loader transition. A real launch, BepInEx initialization, game compatibility, and server connection are still untested.
 
-Ordinary Steam launches leave this bootstrap disabled unless the player has configured their own
-Doorstop launch overrides. Existing Steam launch options and real game behavior still need a
-player test. No actual game or Steam process was started during automated validation.
+Ordinary Steam launches leave the launcher's bootstrap disabled. A bootstrap DLL upgrade may require manual replacement after backup. No game files or user saves are changed by automated tests.
 
-## Regression checks
-
-The sibling Bisheim2pt0.Tests console project uses temporary fake Steam/game/profile folders;
-it does not load DLLs or start Steam. Run:
-
-```powershell
-dotnet run --project ..\Bisheim2pt0.Tests\Bisheim2pt0.Tests.csproj
-```
-
-Twelve checks cover library formats, missing games, paths with spaces, both Doorstop argument
-formats, direct-connect arguments, disabled bootstrap defaults, repeated setup, conflicting
-loader/config preservation, and missing preloader rejection.
-
-Implementation references:
-- https://github.com/NeighTools/UnityDoorstop#cli-arguments
-- https://github.com/NeighTools/UnityDoorstop/tree/legacy
-- https://github.com/BepInEx/BepInEx/blob/v5.4.23.2/BepInEx.Preloader/Entrypoint.cs
-
-Still required before distribution: real hosted URLs, verified client pack contents and compatible
-mod versions, config preservation/backup and transactional update handling, and an end-to-end
-Windows play test. The existing manifest/package placeholders remain unchanged.
+The old manifest.example.json and manifest.current.json are legacy source examples and are no longer read by the launcher.
